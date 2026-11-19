@@ -17,7 +17,7 @@ on:
     # principe déjà en place pour le workflow risques. Calé à :10 pour
     # avoir terminé avant le passage risques à :50 (qui dépend de ces
     # données).
-    - cron: "10 * * * *"
+    - cron: "19 4 * * *"
 
 permissions:
   contents: write
