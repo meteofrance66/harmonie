@@ -1,10 +1,13 @@
-name: Mise Ã  jour HARMONIE France
+name: Mise à jour HARMONIE France
 
 on:
+  schedule:
+    # 4 runs par jour au maximum (le KNMI publie toutes les 3 h ; le script s'arrête vite si le run est déjà publié).
+    - cron: "20 3,9,15,21 * * *"
   workflow_dispatch:
     inputs:
       force:
-        description: "Retraiter mÃªme si le script pense que le run KNMI est dÃ©jÃ  publiÃ© (utile aprÃ¨s un skip incorrect, ex. cache CDN)"
+        description: "Retraiter même si le script pense que le run KNMI est déjà publié (utile après un skip incorrect, ex. cache CDN)"
         type: boolean
         default: false
 
@@ -18,12 +21,12 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-24.04
-    # La premiÃ¨re archive peut Ãªtre volumineuse ; les passages suivants
-    # s'arrÃªtent vite tant que le KNMI n'a pas publiÃ© un nouveau run.
+    # La première archive peut être volumineuse ; les passages suivants
+    # s'arrêtent vite tant que le KNMI n'a pas publié un nouveau run.
     timeout-minutes: 180
 
     steps:
-      - name: RÃ©cupÃ©rer le dÃ©pÃ´t
+      - name: Récupérer le dépôt
         uses: actions/checkout@v7
 
       - name: Installer Python
@@ -32,16 +35,16 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Installer ecCodes et les dÃ©pendances
+      - name: Installer ecCodes et les dépendances
         run: python -m pip install --disable-pip-version-check -r requirements.txt
 
-      - name: TÃ©lÃ©charger et dÃ©coder HARMONIE pour toutes les communes
+      - name: Télécharger et décoder HARMONIE pour toutes les communes
         id: build
         env:
           KNMI_API_KEY: ${{ secrets.KNMI_API_KEY }}
           LOG_LEVEL: INFO
         run: |
-          # Coupures passagÃ¨res de la source (connexion fermÃ©e, 429/5xx, dÃ©lai dÃ©passÃ©) : jusqu'Ã  3 tentatives.
+          # Coupures passagères de la source (connexion fermée, 429/5xx, délai dépassé) : jusqu'à 3 tentatives.
           set -o pipefail
           for attempt in 1 2 3; do
             if python scripts/update_harmonie_france.py \
@@ -54,20 +57,20 @@ jobs:
               break
             fi
             if [ "$attempt" -eq 3 ] || ! grep -qiE 'RemoteDisconnected|Connection(Error|Reset|refused| aborted)|IncompleteRead|ReadTimeout|ConnectTimeout|ChunkedEncodingError|ProtocolError|Max retries exceeded|Temporary failure in name resolution|Name or service not known|SSLError|HTTP ?(Error)?:? ?(429|500|502|503|504)|(429|502|503|504) (Too Many|Bad Gateway|Service Unavailable|Gateway Time|Server)|Server is busy|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|timed out|Read timed' "$RUNNER_TEMP/tentative.log"; then
-              echo "::error::Ã‰chec (tentative $attempt)"
+              echo "::error::Échec (tentative $attempt)"
               exit 1
             fi
-            echo "Erreur rÃ©seau passagÃ¨re (tentative $attempt), nouvelle tentative dans 90 s"
+            echo "Erreur réseau passagère (tentative $attempt), nouvelle tentative dans 90 s"
             sleep 90
           done
           if test -f build/national/index.json; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "Aucune nouvelle Ã©chÃ©ance nationale Ã  publier."
+            echo "Aucune nouvelle échéance nationale à publier."
           fi
 
-      - name: VÃ©rifier la publication
+      - name: Vérifier la publication
         if: steps.build.outputs.publish == 'true'
         run: |
           python - <<'PY'
@@ -88,7 +91,7 @@ jobs:
           print(
               f"Validation OK : {index['coverage']['communes']} communes, "
               f"{len(maps['layers'])} couches carte, "
-              f"{len(maps['steps'])} Ã©chÃ©ances, "
+              f"{len(maps['steps'])} échéances, "
               f"run {index.get('run', '?')}"
           )
           PY
@@ -107,6 +110,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
-          git commit -m "Mise Ã  jour HARMONIE France $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git commit -m "Mise à jour HARMONIE France $(date -u +'%Y-%m-%d %H:%M UTC')"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPOSITORY}.git"
           git push --force origin data
